@@ -1,0 +1,1252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Demand Forecasting Platform — Turning a forecasting model into a production system</title>
+<meta name="description" content="Taking an inherited Kedro demand-forecasting pipeline on AWS and making it an operable production system: validation, release discipline, runbooks and recovery — a case study by John Carlo Cueva">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&family=Source+Serif+4:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #0E1B2C;
+  --bg-soft: #142539;
+  --bg-section: #182B43;
+  --surface: #1B304D;
+  --surface-elevated: #213A5C;
+
+  --ink: #F5F1E8;
+  --ink-muted: #B4BFCF;
+  --ink-faded: #7889A0;
+  --ink-dim: #4C5D75;
+
+  --rule: rgba(245, 241, 232, 0.1);
+  --rule-soft: rgba(245, 241, 232, 0.05);
+  --rule-strong: rgba(245, 241, 232, 0.18);
+
+  --accent-900: #4A2010;
+  --accent-700: #B85A1E;
+  --accent-500: #E87B33;
+  --accent-300: #F4A66B;
+  --accent-100: #F8D2B0;
+
+  --teal-700: #1E6F6F;
+  --teal-500: #2BA39C;
+  --teal-300: #6BC7C0;
+  --teal-100: #B8E0DC;
+
+  --sage-700: #5C7048;
+  --sage-500: #87A56B;
+  --sage-300: #B0C497;
+
+  --rose-700: #8E3B3B;
+  --rose-500: #C25B5B;
+  --rose-300: #E79595;
+
+  --font-display: 'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-body: 'DM Sans', -apple-system, system-ui, sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', Menlo, monospace;
+  --font-serif: 'Source Serif 4', Georgia, serif;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { font-size: 16px; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; scroll-behavior: smooth; }
+
+body {
+  font-family: var(--font-body);
+  color: var(--ink);
+  background: var(--bg);
+  line-height: 1.55;
+  min-height: 100vh;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 2rem; }
+
+/* === Header === */
+.site-head {
+  border-bottom: 1px solid var(--rule);
+  padding: 1.125rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+  background: rgba(14, 27, 44, 0.88);
+}
+.site-head-row { display: flex; align-items: center; justify-content: space-between; gap: 2rem; }
+.brand {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 1rem;
+  letter-spacing: -0.01em;
+  color: var(--ink);
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.brand::before {
+  content: "";
+  display: inline-block;
+  width: 0.5rem;
+  height: 1.125rem;
+  background: var(--accent-500);
+  border-radius: 1px;
+}
+.brand span {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--ink-faded);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  margin-left: 0.5rem;
+  text-transform: uppercase;
+}
+.site-nav { display: flex; gap: 1.75rem; font-size: 0.875rem; align-items: center; }
+.site-nav a { color: var(--ink-muted); text-decoration: none; transition: color 0.15s; font-weight: 500; }
+.site-nav a:hover { color: var(--accent-300); }
+
+/* === Hero === */
+.hero { padding: 6rem 0 3rem; position: relative; }
+.kicker {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--accent-300);
+  margin-bottom: 1.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.625rem;
+  padding: 0.375rem 0.875rem;
+  background: rgba(232, 123, 51, 0.1);
+  border-radius: 4px;
+  border: 1px solid rgba(232, 123, 51, 0.2);
+}
+.kicker .dot { width: 0.375rem; height: 0.375rem; background: var(--accent-500); border-radius: 50%; display: inline-block; }
+.hero h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: clamp(2.5rem, 5.5vw, 4.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+  max-width: 22ch;
+  margin-bottom: 1.75rem;
+}
+.hero h1 .serif { font-family: var(--font-serif); font-style: italic; font-weight: 500; color: var(--accent-300); }
+.hero-lede {
+  font-weight: 400;
+  font-size: 1.1875rem;
+  line-height: 1.6;
+  color: var(--ink-muted);
+  max-width: 64ch;
+  margin-bottom: 2.5rem;
+}
+.byline {
+  display: flex; align-items: center; gap: 1rem;
+  padding-top: 1.25rem; border-top: 1px solid var(--rule);
+  max-width: 44rem; font-size: 0.875rem; color: var(--ink-muted); flex-wrap: wrap;
+}
+.byline strong { color: var(--ink); font-weight: 600; }
+.byline .sep { color: var(--ink-dim); }
+.byline .mono { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--ink-faded); }
+.byline .tag {
+  font-family: var(--font-mono); font-size: 0.7rem;
+  background: rgba(43, 163, 156, 0.12); color: var(--teal-300);
+  padding: 0.2rem 0.55rem; border-radius: 3px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  border: 1px solid rgba(43, 163, 156, 0.25);
+}
+
+/* === Stat band === */
+.stat-band {
+  display: grid; grid-template-columns: repeat(5, 1fr); gap: 1rem;
+  margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--rule);
+}
+@media (max-width: 900px) { .stat-band { grid-template-columns: repeat(2, 1fr); } }
+.stat { display: flex; flex-direction: column; gap: 0.375rem; }
+.stat-number {
+  font-family: var(--font-display); font-weight: 600; font-size: 2rem;
+  letter-spacing: -0.025em; color: var(--accent-300); line-height: 1;
+}
+.stat-label {
+  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-faded); font-weight: 500;
+}
+
+/* === Section === */
+section { padding: 3.5rem 0; }
+.section-label {
+  display: flex; align-items: baseline; gap: 1rem; margin-bottom: 2rem;
+  padding-bottom: 1rem; border-bottom: 1px solid var(--rule); flex-wrap: wrap;
+}
+.section-num {
+  font-family: var(--font-mono); font-size: 0.75rem; letter-spacing: 0.08em;
+  color: var(--accent-500); font-weight: 500; background: rgba(232, 123, 51, 0.1);
+  padding: 0.2rem 0.55rem; border-radius: 3px; border: 1px solid rgba(232, 123, 51, 0.2);
+}
+.section-title {
+  font-family: var(--font-display); font-weight: 600; font-size: 1.875rem;
+  letter-spacing: -0.025em; color: var(--ink);
+}
+.section-sub {
+  font-family: var(--font-mono); font-weight: 400; color: var(--ink-faded);
+  margin-left: auto; font-size: 0.8125rem; text-transform: uppercase; letter-spacing: 0.06em;
+}
+.section-intro { font-size: 1rem; line-height: 1.65; color: var(--ink-muted); max-width: 72ch; margin-bottom: 1.75rem; }
+.section-intro code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-soft); padding: 0.1rem 0.375rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+
+/* === Diagram frame === */
+.diagram-frame { background: var(--surface); border: 1px solid var(--rule-strong); padding: 2rem; border-radius: 8px; }
+.diagram-label {
+  font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--ink-faded); margin-bottom: 1.25rem;
+  display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
+}
+.diagram-label .label-title {
+  font-family: var(--font-display); font-weight: 500; font-size: 1rem;
+  letter-spacing: -0.015em; color: var(--ink); text-transform: none;
+}
+.hint {
+  background: rgba(232, 123, 51, 0.08); border: 1px solid rgba(232, 123, 51, 0.2);
+  padding: 0.875rem 1.125rem; border-radius: 6px; margin-bottom: 1.5rem;
+  font-size: 0.875rem; color: var(--ink-muted);
+  display: flex; align-items: center; gap: 0.875rem; flex-wrap: wrap;
+}
+.hint strong {
+  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--accent-300); font-weight: 500;
+  padding: 0.2rem 0.55rem; background: rgba(232, 123, 51, 0.15);
+  border-radius: 3px; border: 1px solid rgba(232, 123, 51, 0.25); flex-shrink: 0;
+}
+.svg-wrap { width: 100%; display: flex; justify-content: center; overflow-x: auto; }
+.svg-wrap svg { max-width: 100%; height: auto; min-width: 760px; }
+
+.svg-th { font-family: var(--font-mono); font-size: 12px; font-weight: 500; letter-spacing: -0.01em; }
+.svg-ts { font-family: var(--font-body); font-size: 10.5px; font-weight: 400; }
+.svg-tag { font-family: var(--font-mono); font-size: 8.5px; font-weight: 500; letter-spacing: 0.08em; }
+.svg-arr { stroke: var(--ink-faded); stroke-width: 1.25; fill: none; }
+.svg-container { fill: none; stroke: var(--ink-dim); stroke-width: 1; stroke-dasharray: 4 4; }
+.svg-container-solid { fill: rgba(43,163,156,0.05); stroke: var(--teal-700); stroke-width: 1; }
+.svg-region-label { font-family: var(--font-mono); font-size: 10px; fill: var(--ink-faded); letter-spacing: 0.08em; font-weight: 500; }
+.svg-edge-label { font-family: var(--font-mono); font-size: 9px; fill: var(--ink-faded); letter-spacing: 0.04em; }
+
+.node-group { cursor: pointer; transition: filter 0.15s ease; }
+.node-group:hover { filter: brightness(1.14); }
+.node-group:hover rect.nbox { stroke-width: 2; }
+.node-static { cursor: default; }
+
+/* === Legend === */
+.legend { display: flex; gap: 0.625rem; flex-wrap: wrap; margin-bottom: 1.25rem; }
+.lg {
+  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.07em; padding: 0.25rem 0.625rem; border-radius: 3px; font-weight: 500;
+}
+.lg.new { background: rgba(43,163,156,0.12); color: var(--teal-300); border: 1px solid rgba(43,163,156,0.3); }
+.lg.mod { background: rgba(232,123,51,0.12); color: var(--accent-300); border: 1px solid rgba(232,123,51,0.3); }
+.lg.unc { background: var(--bg-section); color: var(--ink-faded); border: 1px solid var(--rule); }
+
+/* === Pipeline === */
+.pipeline { display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--rule-strong); border-radius: 8px; overflow: hidden; }
+.pipeline-step {
+  display: grid; grid-template-columns: auto 1fr; gap: 1.75rem;
+  padding: 1.5rem 1.75rem; border-bottom: 1px solid var(--rule);
+  align-items: start; transition: background 0.15s;
+}
+.pipeline-step:last-child { border-bottom: none; }
+.pipeline-step:hover { background: var(--surface-elevated); }
+.pipeline-num {
+  font-family: var(--font-mono); font-weight: 500; font-size: 0.875rem;
+  color: var(--accent-300); background: rgba(232, 123, 51, 0.1);
+  padding: 0.625rem 0.875rem; border-radius: 6px;
+  border: 1px solid rgba(232, 123, 51, 0.25); height: fit-content;
+  min-width: 3.25rem; text-align: center;
+}
+.pipeline-step.is-new .pipeline-num { color: var(--teal-300); background: rgba(43,163,156,0.1); border-color: rgba(43,163,156,0.3); }
+.pipeline-body { display: flex; flex-direction: column; gap: 0.5rem; }
+.pipeline-title { font-family: var(--font-display); font-weight: 600; font-size: 1.125rem; letter-spacing: -0.015em; color: var(--ink); }
+.pipeline-tech { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-300); font-weight: 500; }
+.pipeline-step.is-new .pipeline-tech { color: var(--teal-300); }
+.pipeline-desc { font-size: 0.9375rem; color: var(--ink-muted); line-height: 1.6; max-width: 72ch; margin-top: 0.125rem; }
+.pipeline-desc code, .pipeline-note code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-soft); padding: 0.1rem 0.375rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+.pipeline-desc strong { color: var(--ink); font-weight: 600; }
+.pipeline-note { font-size: 0.875rem; color: var(--ink-faded); line-height: 1.6; max-width: 72ch; }
+
+/* === Checks grid === */
+.checks-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 0.75rem; }
+.check-card {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  padding: 1.125rem 1.25rem 1.25rem; display: flex; gap: 0.875rem;
+  align-items: flex-start; transition: all 0.16s;
+}
+.check-card:hover { background: var(--surface-elevated); border-color: var(--rule-strong); transform: translateY(-1px); }
+.check-card.out { border-left: 3px solid var(--teal-700); }
+.ck-num { font-family: var(--font-mono); font-size: 0.8125rem; color: var(--accent-300); font-weight: 500; flex: none; padding-top: 0.0625rem; }
+.check-card.out .ck-num { color: var(--teal-300); }
+.ck-body { flex: 1; min-width: 0; }
+.ck-title { font-family: var(--font-display); font-weight: 600; font-size: 0.9375rem; color: var(--ink); letter-spacing: -0.012em; line-height: 1.3; }
+.ck-desc { font-size: 0.8125rem; color: var(--ink-muted); line-height: 1.55; margin-top: 0.3125rem; }
+.ck-spec { font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.07em; color: var(--ink-faded); margin-top: 0.5rem; }
+.ck-spec b { color: var(--accent-300); font-weight: 500; }
+
+/* === Defects === */
+.defects-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 1rem; }
+.defect {
+  background: var(--surface); border: 1px solid var(--rule); border-radius: 8px;
+  overflow: hidden; display: flex; flex-direction: column; transition: all 0.18s;
+}
+.defect:hover { border-color: var(--rule-strong); background: var(--surface-elevated); }
+.defect-head { padding: 1.25rem 1.5rem 1.125rem; border-bottom: 1px solid var(--rule); background: var(--bg-section); }
+.defect-kind {
+  font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent-300); background: rgba(232,123,51,0.12);
+  padding: 0.2rem 0.55rem; border-radius: 3px; border: 1px solid rgba(232,123,51,0.25);
+  display: inline-block; font-weight: 500;
+}
+.defect-title { font-family: var(--font-display); font-weight: 600; font-size: 1.125rem; letter-spacing: -0.02em; color: var(--ink); line-height: 1.3; margin: 0.75rem 0 0.4375rem; }
+.defect-path { font-family: var(--font-mono); font-size: 0.7rem; color: var(--ink-faded); word-break: break-all; }
+.defect-body { padding: 1.375rem 1.5rem 1.5rem; flex: 1; display: flex; flex-direction: column; }
+.ba { font-family: var(--font-mono); font-size: 0.7rem; line-height: 1.6; border-radius: 6px; overflow: hidden; margin-bottom: 1rem; border: 1px solid var(--rule); }
+.ba div { padding: 0.5rem 0.75rem; white-space: pre-wrap; word-break: break-word; }
+.ba .was { background: rgba(194,91,91,0.1); color: var(--rose-300); border-bottom: 1px solid var(--rule); }
+.ba .now { background: rgba(43,163,156,0.1); color: var(--teal-300); }
+.defect-body p { font-size: 0.875rem; line-height: 1.65; color: var(--ink-muted); margin-bottom: 0.75rem; }
+.defect-body p:last-of-type { margin-bottom: 0; }
+.defect-body strong { color: var(--ink); font-weight: 600; }
+.defect-impact {
+  margin-top: auto; padding-top: 0.875rem; border-top: 1px solid var(--rule);
+  font-size: 0.8125rem; line-height: 1.6; color: var(--ink-muted);
+}
+.defect-impact b { font-family: var(--font-mono); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--teal-300); display: block; margin-bottom: 0.3125rem; font-weight: 500; }
+
+/* === Decisions === */
+.decisions-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+@media (max-width: 860px) { .decisions-grid { grid-template-columns: 1fr; } }
+.decision-card { background: var(--surface); border: 1px solid var(--rule); padding: 1.75rem; border-radius: 8px; transition: all 0.18s; }
+.decision-card:hover { background: var(--surface-elevated); border-color: var(--rule-strong); }
+.decision-q { font-family: var(--font-display); font-weight: 600; font-size: 1.0625rem; letter-spacing: -0.015em; color: var(--accent-300); margin-bottom: 0.75rem; line-height: 1.3; }
+.decision-a { font-size: 0.9375rem; line-height: 1.6; color: var(--ink-muted); }
+.decision-a strong { color: var(--ink); font-weight: 600; }
+.decision-a code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-soft); padding: 0.1rem 0.375rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+
+/* === Stack / reference table === */
+.stack-table { width: 100%; background: var(--surface); border: 1px solid var(--rule-strong); border-collapse: collapse; border-radius: 8px; overflow: hidden; }
+.stack-table tr { border-bottom: 1px solid var(--rule); }
+.stack-table tr:last-child { border-bottom: none; }
+.stack-table tr:hover { background: var(--surface-elevated); }
+.stack-table td { padding: 0.875rem 1.5rem; vertical-align: top; }
+.stack-table td:first-child {
+  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.08em; color: var(--ink-faded); width: 30%; font-weight: 500;
+}
+.stack-table td:nth-child(2) { font-size: 0.9375rem; color: var(--ink-muted); }
+.stack-table code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-soft); padding: 0.15rem 0.4rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+.stack-table strong { color: var(--ink); font-weight: 600; }
+.tbl-scroll { overflow-x: auto; }
+
+/* === Callouts === */
+.callout {
+  background: rgba(43,163,156,0.07); border: 1px solid rgba(43,163,156,0.22);
+  border-left: 3px solid var(--teal-500); padding: 1.125rem 1.375rem;
+  border-radius: 6px; margin-top: 1.5rem; font-size: 0.9375rem;
+  line-height: 1.65; color: var(--ink-muted);
+}
+.callout.warn { background: rgba(232,123,51,0.07); border-color: rgba(232,123,51,0.22); border-left-color: var(--accent-500); }
+.callout strong { color: var(--ink); font-weight: 600; }
+.callout code { font-family: var(--font-mono); font-size: 0.85em; background: var(--bg-soft); padding: 0.1rem 0.375rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+
+/* === About === */
+.about-grid { display: grid; grid-template-columns: 1.3fr 1fr; gap: 2.5rem; }
+@media (max-width: 860px) { .about-grid { grid-template-columns: 1fr; gap: 1.75rem; } }
+.about-body p { font-size: 1rem; line-height: 1.7; color: var(--ink-muted); margin-bottom: 1rem; }
+.about-body p:last-child { margin-bottom: 0; }
+.about-body strong { color: var(--ink); font-weight: 600; }
+.about-list { background: var(--surface); border: 1px solid var(--rule); border-radius: 8px; padding: 1.5rem 1.75rem; }
+.about-list h4 { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-300); font-weight: 500; margin-bottom: 1rem; padding-bottom: 0.625rem; border-bottom: 1px solid var(--rule); }
+.about-list ul { list-style: none; display: flex; flex-direction: column; gap: 0.625rem; }
+.about-list li { font-size: 0.875rem; line-height: 1.55; color: var(--ink-muted); padding-left: 1.25rem; position: relative; }
+.about-list li::before { content: "▸"; position: absolute; left: 0; color: var(--accent-500); font-size: 0.75em; top: 0.3em; }
+.about-list + .about-list { margin-top: 1rem; }
+
+/* === Modal === */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; opacity: 0; pointer-events: none; transition: opacity 0.2s; backdrop-filter: blur(6px); }
+.modal-backdrop.open { opacity: 1; pointer-events: all; }
+.modal-panel {
+  position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100%);
+  background: var(--bg-soft); z-index: 101; transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0.32, 0.96);
+  overflow-y: auto; border-left: 1px solid var(--rule-strong);
+  display: flex; flex-direction: column; box-shadow: -16px 0 40px rgba(0,0,0,0.4);
+}
+.modal-panel.open { transform: translateX(0); }
+.modal-header { padding: 2rem 2.5rem 1.5rem; border-bottom: 1px solid var(--rule); background: var(--bg-section); position: sticky; top: 0; z-index: 2; }
+.modal-close {
+  position: absolute; top: 1.5rem; right: 1.5rem; width: 2rem; height: 2rem;
+  background: transparent; border: 1px solid var(--rule); color: var(--ink-muted);
+  cursor: pointer; border-radius: 6px; display: flex; align-items: center;
+  justify-content: center; font-size: 1rem; transition: all 0.15s; font-family: var(--font-body);
+}
+.modal-close:hover { background: var(--accent-500); color: var(--bg); border-color: var(--accent-500); }
+.modal-category {
+  font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase;
+  letter-spacing: 0.1em; color: var(--accent-300); margin-bottom: 0.75rem;
+  background: rgba(232,123,51,0.12); padding: 0.25rem 0.625rem; border-radius: 3px;
+  display: inline-block; font-weight: 500; border: 1px solid rgba(232,123,51,0.25);
+}
+.modal-category.is-new { color: var(--teal-300); background: rgba(43,163,156,0.12); border-color: rgba(43,163,156,0.25); }
+.modal-title { font-family: var(--font-display); font-weight: 600; font-size: 1.75rem; letter-spacing: -0.025em; color: var(--ink); line-height: 1.15; padding-right: 3rem; }
+.modal-title .alt { display: block; font-family: var(--font-mono); font-size: 0.875rem; color: var(--ink-faded); font-weight: 400; letter-spacing: 0; margin-top: 0.375rem; word-break: break-all; }
+.modal-summary { font-size: 1rem; line-height: 1.6; color: var(--ink-muted); margin-top: 1rem; }
+.modal-body { padding: 2rem 2.5rem 3rem; }
+.modal-block { margin-bottom: 2rem; }
+.modal-block:last-child { margin-bottom: 0; }
+.modal-block-label { font-family: var(--font-mono); font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--accent-300); margin-bottom: 0.875rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--rule); font-weight: 500; }
+.modal-block p { font-size: 0.9375rem; line-height: 1.65; color: var(--ink-muted); margin-bottom: 0.75rem; }
+.modal-block p:last-child { margin-bottom: 0; }
+.modal-block ul { list-style: none; display: flex; flex-direction: column; gap: 0.625rem; }
+.modal-block li { font-size: 0.875rem; line-height: 1.55; color: var(--ink-muted); padding-left: 1.5rem; position: relative; }
+.modal-block li::before { content: "▸"; position: absolute; left: 0; top: 0; color: var(--accent-500); font-size: 0.8em; line-height: 1.55; }
+.modal-block code { font-family: var(--font-mono); font-size: 0.8125rem; background: var(--bg-soft); padding: 0.1rem 0.375rem; border-radius: 3px; color: var(--accent-300); border: 1px solid var(--rule); }
+.modal-block strong { color: var(--ink); font-weight: 600; }
+
+/* === Footer === */
+footer { border-top: 1px solid var(--rule); padding: 3rem 0; margin-top: 4rem; background: var(--bg-soft); }
+.foot-grid { display: flex; justify-content: space-between; align-items: center; gap: 2rem; flex-wrap: wrap; }
+.foot-brand { font-family: var(--font-display); font-weight: 600; font-size: 0.9375rem; color: var(--ink); letter-spacing: -0.015em; }
+.foot-grid p { font-size: 0.875rem; color: var(--ink-muted); }
+.foot-grid .mono { font-family: var(--font-mono); font-size: 0.75rem; color: var(--ink-faded); }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+.hero > * { animation: fadeUp 0.6s ease-out both; }
+.hero > *:nth-child(1) { animation-delay: 0.05s; }
+.hero > *:nth-child(2) { animation-delay: 0.15s; }
+.hero > *:nth-child(3) { animation-delay: 0.25s; }
+.hero > *:nth-child(4) { animation-delay: 0.35s; }
+.hero > *:nth-child(5) { animation-delay: 0.45s; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--ink-dim); border: 3px solid var(--bg); border-radius: 5px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ink-faded); }
+
+@media (max-width: 640px) {
+  .wrap { padding: 0 1.25rem; }
+  .site-nav { display: none; }
+  section { padding: 2rem 0; }
+  .hero { padding: 3rem 0 2.5rem; }
+  .modal-panel { width: 100%; }
+  .modal-header, .modal-body { padding-left: 1.5rem; padding-right: 1.5rem; }
+  .pipeline-step { grid-template-columns: 1fr; gap: 0.5rem; padding: 1.25rem; }
+  .diagram-frame { padding: 1rem; }
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone@7.24.7/babel.min.js"></script>
+
+<script type="text/babel">
+const { useState, useEffect, useCallback } = React;
+
+/* =====================================================================
+   COMPONENTS — clickable architecture nodes
+   ===================================================================== */
+const COMPONENTS = {
+  repo: {
+    name: "Source repository",
+    altName: "branch · pull request · review",
+    category: "Delivery · version control",
+    kind: "dev",
+    summary: "The pipeline source, its environment-scoped configuration, and the two workflow definitions that build and deploy it. Enterprise-hosted, with the pull request as the unit of change.",
+    role: "Everything that determines what a run does lives here: the node graph, the data catalog describing 118 datasets, per-environment parameter files, and the declared schema for the reporting tables. There is no console-configured behaviour and no environment-specific build — the same image serves every environment and the difference between them is input, not artefact. The practical consequence is that a question like 'what did the October production run actually execute' has a commit-shaped answer.",
+    talking: [
+      "One image per release serves all three environments — environments differ by parameters, not by build",
+      "The data catalog is the single source of truth for 118 datasets; no path is constructed in code",
+      "Declared reporting-table schema lives in the repository, so the database shape is reviewable in a diff",
+      "Pull request is the only path to a release image, which makes the review gate structural rather than cultural"
+    ]
+  },
+  build: {
+    name: "Build workflow",
+    altName: "produces images · deploys nothing",
+    category: "Delivery · continuous integration",
+    kind: "dev",
+    summary: "Builds a container image and pushes it. That is the entire scope. A merge to the main branch produces an immutable release image; a pull request produces a mutable per-branch image for testing.",
+    role: "Separating build from deploy is the single most load-bearing decision in the delivery model. A workflow that built and shipped in one action would mean every merge reached an environment, and the only control left would be the merge itself. Splitting them means the artefact can exist, be inspected and be promoted deliberately — and it means a branch can be proven in a real environment before it is merged rather than after. The build runs in two to four minutes because it layers onto a pre-baked base image carrying the dependency tree and the compiled statistical toolchain.",
+    talking: [
+      "Build and deploy as separate workflows — the artefact exists before anyone decides where it goes",
+      "Pull-request builds let a branch be tested in a real environment pre-merge, so a failure never has to be reverted out of the main line",
+      "Two to four minute builds by layering on a pre-baked base image with dependencies and the compiled toolchain already present",
+      "Release images are immutable and commit-tagged; branch images are mutable and move with the branch",
+      "Open gap: no test step in this workflow, so the unit suite does not run automatically — raised, not solved"
+    ]
+  },
+  ecr: {
+    name: "Container registry",
+    altName: "immutable releases · mutable branch builds",
+    category: "Delivery · artefact store",
+    kind: "dev",
+    summary: "Two repositories with deliberately different guarantees. Release images are immutable and tagged by commit. Branch images are mutable and the tag moves with every new commit.",
+    role: "The split exists because the two serve different purposes. A release image must be able to answer 'which code produced this forecast' years later, so it is immutable and commit-tagged and a task-definition revision referencing it is a genuine audit record. A branch image is a convenience for iteration, so its tag moves and a revision referencing it is not an audit record — the same revision can launch different code on different days. That asymmetry is fine as long as it is understood, which is why it is written down rather than discovered.",
+    talking: [
+      "Immutable release repository means a task-definition revision is a real audit record",
+      "Mutable branch tags mean a development revision is not one — the commit must be recorded alongside any result",
+      "Cross-account copy into the production registry, so production never pulls from a non-production account",
+      "Registry-to-registry copy with no local pull, which keeps the deploy runner stateless"
+    ]
+  },
+  promote: {
+    name: "Promote workflow",
+    altName: "one environment per run · reviewer-gated",
+    category: "Delivery · deployment",
+    kind: "dev",
+    summary: "The only thing that changes what an environment runs. Registers a new task-definition revision pointing at a chosen image, for exactly one environment, behind a required reviewer.",
+    role: "Nothing auto-deploys anywhere. Promotion resolves an image from its inputs in a fixed precedence — a named branch build first, then a specific release tag, then the latest release — and refuses a branch build for production outright, so production can only ever run an immutable, commit-tagged image. It can also launch the run itself, which collapses deploy-then-trigger into one gated action. The failure mode it is designed against is the most common one in this class of system: promoting without setting the image input, which silently deploys the previous release and produces a green run that proves nothing.",
+    talking: [
+      "One environment per run, each behind its own required reviewer — no fan-out deployment",
+      "Fixed image-resolution precedence, with branch builds structurally refused for production",
+      "Deploy and launch in one gated action rather than two unrelated buttons",
+      "Designed against the specific mistake of promoting the wrong image and reading the resulting green run as a pass",
+      "Verification step is cultural, not automated: read the revision's image reference before trusting the result"
+    ]
+  },
+  taskdef: {
+    name: "Task definition",
+    altName: "revision pins image, resources and secrets",
+    category: "Runtime · deployment target",
+    kind: "dev",
+    summary: "A versioned definition of what to launch: the image, CPU and memory, environment variables, secret references, IAM role and log configuration. Promotion creates a new revision; the schedule targets the family, so the newest active revision is what runs.",
+    role: "Because the scheduler targets the family rather than a pinned revision, promotion is the act of deployment — there is no separate release step and no long-running service to update. The revision also carries the storage location for the environment, which matters more than it sounds: the production bucket name differs structurally from the lower environments, and a revision that inherited a default would write to the wrong place and be refused by the encryption key policy rather than silently succeeding.",
+    talking: [
+      "Schedule targets the family, so the newest revision is live — registering a revision is deploying",
+      "Environment-specific storage is set on the revision, not inferred, and a wrong value fails closed on the key policy",
+      "No long-running service to drain or roll — a batch workload, so rollback is registering the previous image again",
+      "Resources, secrets, role and logging are versioned with the image rather than configured beside it"
+    ]
+  },
+  raw: {
+    name: "Source data",
+    altName: "monthly extracts, object storage",
+    category: "Runtime · inputs",
+    kind: "data",
+    summary: "The monthly source extracts: in-market units, market share, a market-model set covering every brand in the category, three promotional spend files, and a transactional extract. Delivered by upstream teams on a monthly cadence.",
+    role: "This is where the forecast's quality is actually determined, and for a long time it was the least examined part of the system. The files arrive from several upstream owners with no common contract — different date conventions between files, no declared end date, no row-count expectation. A short file, a partial final month or a value entered at the wrong scale all produce a run that completes successfully and a forecast that is confidently wrong. Three of the files are summed together, so a month present in some and absent in others yields a single null that fails a run an hour later with an unrelated message.",
+    talking: [
+      "Several upstream owners, no shared data contract — the integration risk is organisational before it is technical",
+      "Date conventions differ between files, and nothing in the system declared which was which",
+      "Summed inputs turn a one-month gap into a single null, which is the hardest possible failure to read",
+      "Some sources are static history verified once and deliberately excluded from recurring checks",
+      "The input layer is where validation earns the most, because a bad input costs a full run to discover"
+    ]
+  },
+  kedro: {
+    name: "Pipeline on serverless containers",
+    altName: "node graph · one container per run",
+    category: "Runtime · compute",
+    kind: "core",
+    summary: "The forecasting pipeline itself — a declarative node graph with a data catalog, environment-scoped configuration and a lifecycle hook system. Runs as a single container task per execution, with no persistent infrastructure between runs.",
+    role: "The framework choice is what makes the rest of the operating model possible: the graph is declarative, so a validation step is a node with inputs and outputs rather than a script bolted to the side; the catalog abstracts storage, so the same code runs against any environment's data by configuration alone; and the hook system gives a defined place for cross-cutting concerns like reconciling the reporting schema before the first node executes. A configuration-only pass can be run against the graph without executing it, which is what makes input validation nearly free — it joins a pass that already happened.",
+    talking: [
+      "Declarative graph means a check is a first-class node, not a side-effecting script",
+      "Catalog abstraction is why one image serves three environments with no code branching",
+      "Hook system gives cross-cutting concerns a defined execution point rather than an import side effect",
+      "Configuration-only pass makes input validation almost free — it joins a pass that already ran",
+      "Running two major versions behind, with a known two-step upgrade path and no supported direct jump"
+    ]
+  },
+  models: {
+    name: "Model store",
+    altName: "one artefact per forecast level",
+    category: "Runtime · model artefacts",
+    kind: "data",
+    summary: "Trained models persisted to object storage, one artefact per forecast level rather than one for the portfolio. A run either trains new ones or loads what is already there, decided by a single runtime flag.",
+    role: "This is the highest-risk store in the system and was the least protected. It is written with overwrite semantics and no archive, so a retraining run replaces the previous models rather than versioning beside them. A retrain on a day when the source data was bad therefore destroys the known-good artefact and produces a model that has learned from corrupt input — a run that completes, publishes, and is caught weeks later by the business rather than by the system. Because artefacts are per-level, a retrain that fails partway leaves a mixed set, and a later run loads all of them without complaint.",
+    talking: [
+      "Overwrite semantics with no archive — a bad retrain destroys the artefact that would be used to recover",
+      "Per-level artefacts mean a partial retrain yields an internally inconsistent model set that still loads cleanly",
+      "One runtime flag separates retrain from rescore, and the value an unattended schedule passes was never confirmed",
+      "Object versioning is enabled but the production role cannot read prior versions, so there is no recovery path in production today",
+      "File timestamps are the cheapest available staleness signal and nothing was reading them"
+    ]
+  },
+  schedule: {
+    name: "Scheduled triggers",
+    altName: "unattended monthly runs",
+    category: "Runtime · orchestration",
+    kind: "dev",
+    summary: "Event-driven schedules that launch the task without a human present. Defined in a separate infrastructure repository from the pipeline they launch.",
+    role: "Unattended execution is the right end state for a monthly cycle, but it widens the blast radius of every input the run takes. The parameter that decides whether a run retrains or merely rescores is one of those inputs, and because the schedules are defined outside the pipeline repository, the value they pass is not visible to the team that owns the pipeline. A schedule passing the retrain value would overwrite the current models with nobody watching — the exact mechanism behind the most expensive failure the platform has had. Confirming that value is a question, not a project, and it remained open longer than it should have.",
+    talking: [
+      "Unattended runs widen the consequence of every input, including the one that overwrites models",
+      "Schedules defined in a different repository from the pipeline, so the team cannot read what they pass",
+      "A cross-repository configuration boundary is an operational risk even when both sides are correct",
+      "The cheapest control is logging the resolved value at run start rather than trusting the caller"
+    ]
+  },
+  reporting: {
+    name: "Published output",
+    altName: "forecast, object storage",
+    category: "Runtime · outputs",
+    kind: "data",
+    summary: "The published forecast: units, market size and share per brand across a 49-month horizon, alongside the feature matrix and model metadata the run used to produce it.",
+    role: "The published file is the artefact the business consumes and the only one that matters commercially, which makes it the right place for the last line of defence. Checking it means asserting things that are true of a correct forecast regardless of model internals — every month of the horizon present, no nulls, rows actually written, and each brand's forecast level in a defensible relationship to that brand's own recent actuals. The last of those has to be per brand, because the pipeline constrains brands to sum to a category total: one brand far too low is cancelled by others too high, and the aggregate is the one view guaranteed to look healthy.",
+    talking: [
+      "Last line of defence sits on the published artefact, not an intermediate",
+      "Assertions chosen to be true of any correct forecast, independent of model internals",
+      "Per-brand level checking, because the enforced category total hides compensating errors",
+      "Independently checkable from a laptop with read-only access, which matters for production assurance",
+      "A partly populated forecast reaching a dashboard is worse than a failed run — nothing on it declares it incomplete"
+    ]
+  },
+  db: {
+    name: "Reporting database",
+    altName: "in-memory analytics store",
+    category: "Runtime · consumption layer",
+    kind: "data",
+    summary: "Four reporting tables holding the forecast, the features behind it, model metadata and accuracy history. Written at the end of every run and read by the business intelligence layer.",
+    role: "The database shape is declared in the repository and reconciled at the start of every run by a lifecycle hook, which adds any missing column before the write that would otherwise fail. That reconciliation is additive only — it compares column names, never types, and can only add — which is what made enabling it safe but also bounds what it can fix. It cannot correct a column declared as one type and created as another, and it cannot reconcile a name the pipeline never writes. Both of those were found in the live tables, and both will recur in any new environment built from the same declaration.",
+    talking: [
+      "Schema declared in the repository and reconciled at run start, so the database shape is reviewable in a diff",
+      "Reconciliation is additive and name-only by design, which is what made it safe to enable and also what limits it",
+      "Declared names that the pipeline never writes produce permanently empty columns rather than an error",
+      "Type drift between declaration and reality is invisible to a name-only comparison",
+      "The accuracy table has been collecting error history every run and nothing has ever read it"
+    ]
+  },
+  bi: {
+    name: "Business intelligence",
+    altName: "commercial planning",
+    category: "Consumption · downstream",
+    kind: "out",
+    summary: "The dashboards the commercial organisation plans against. The end of the chain, and the reason a wrong number that looks right costs more than a run that fails.",
+    role: "Everything upstream is in service of this layer being trustworthy, and it is also where the system's weakest property shows: a dashboard has no way to say that the forecast behind it is incomplete or that the model which produced it was trained on bad data. It renders whatever it is given, with the same confidence either way. That asymmetry — cheap to publish, expensive to retract — is the whole argument for spending engineering effort on detection upstream rather than review downstream.",
+    talking: [
+      "The consuming layer cannot distinguish a good forecast from a plausible wrong one",
+      "Publication is cheap and retraction is expensive, which is why detection belongs upstream",
+      "Business review was the de facto final control, which means defects were found in weeks rather than minutes",
+      "Any assurance claim about the forecast has to be made before this point, not at it"
+    ]
+  }
+};
+
+/* =====================================================================
+   ARCHITECTURE DIAGRAM
+   ===================================================================== */
+const K = {
+  dev:  { fill: "rgba(232,123,51,0.13)",  stroke: "#B85A1E", tag: "#F4A66B" },
+  core: { fill: "rgba(43,163,156,0.16)",  stroke: "#2BA39C", tag: "#6BC7C0" },
+  data: { fill: "rgba(135,165,107,0.13)", stroke: "#5C7048", tag: "#B0C497" },
+  out:  { fill: "#182B43",                stroke: "#4C5D75", tag: "#7889A0" }
+};
+
+function Node({ id, x, y, w, h, label, sub, kind, onClick }) {
+  const c = K[kind];
+  return (
+    <g className="node-group" onClick={() => onClick(id)}>
+      <rect className="nbox" x={x} y={y} width={w} height={h} rx="5" fill={c.fill} stroke={c.stroke} />
+      <text className="svg-th" x={x + 13} y={y + (h > 56 ? 26 : 20)} fill="#F5F1E8">{label}</text>
+      <text className="svg-ts" x={x + 13} y={y + (h > 56 ? 43 : 35)} fill="#7889A0">{sub}</text>
+    </g>
+  );
+}
+
+function ArchitectureDiagram({ onNodeClick }) {
+  return (
+    <svg viewBox="0 0 1160 530" width="1160" role="img" aria-label="Platform architecture: delivery lane and runtime lane">
+      <defs>
+        <marker id="a2" markerWidth="9" markerHeight="7" refX="8" refY="3.5" orient="auto">
+          <polygon points="0 0, 9 3.5, 0 7" fill="#7889A0" />
+        </marker>
+      </defs>
+
+      {/* ===== DELIVERY LANE ===== */}
+      <text className="svg-region-label" x="12" y="46">DELIVERY — NOTHING AUTO-DEPLOYS</text>
+      <rect className="svg-container" x="12" y="56" width="1136" height="104" rx="6" />
+      <Node id="repo"    x={24}  y={88} w={190} h={48} label="Source repository" sub="branch · pull request" kind="dev" onClick={onNodeClick} />
+      <Node id="build"   x={238} y={88} w={190} h={48} label="Build workflow" sub="images only, no deploy" kind="dev" onClick={onNodeClick} />
+      <Node id="ecr"     x={452} y={88} w={190} h={48} label="Container registry" sub="immutable + mutable" kind="dev" onClick={onNodeClick} />
+      <Node id="promote" x={666} y={88} w={190} h={48} label="Promote workflow" sub="one env, reviewer-gated" kind="dev" onClick={onNodeClick} />
+      <Node id="taskdef" x={880} y={88} w={190} h={48} label="Task definition" sub="revision pins the image" kind="dev" onClick={onNodeClick} />
+
+      <path className="svg-arr" d="M214 112 L232 112" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M428 112 L446 112" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M642 112 L660 112" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M856 112 L874 112" markerEnd="url(#a2)" />
+
+      {/* delivery -> runtime */}
+      <path className="svg-arr" d="M975 136 L975 196 L404 196 L404 272" markerEnd="url(#a2)" />
+      <text className="svg-edge-label" x="690" y="190" textAnchor="middle">a promote launches the run</text>
+
+      {/* ===== RUNTIME LANE ===== */}
+      <text className="svg-region-label" x="12" y="262">RUNTIME — ONE CONTAINER PER RUN, NO PERSISTENT INFRASTRUCTURE</text>
+      <rect className="svg-container" x="12" y="272" width="1136" height="196" rx="6" />
+
+      <Node id="raw"       x={24}  y={300} w={190} h={48} label="Source data" sub="monthly extracts" kind="data" onClick={onNodeClick} />
+      <Node id="kedro"     x={254} y={288} w={250} h={72} label="Pipeline on containers" sub="declarative node graph" kind="core" onClick={onNodeClick} />
+      <Node id="reporting" x={544} y={300} w={190} h={48} label="Published output" sub="49-month forecast" kind="data" onClick={onNodeClick} />
+      <Node id="db"        x={774} y={300} w={190} h={48} label="Reporting database" sub="schema reconciled at start" kind="data" onClick={onNodeClick} />
+      <Node id="bi"        x={1004} y={300} w={132} h={48} label="Dashboards" sub="commercial planning" kind="out" onClick={onNodeClick} />
+
+      <Node id="schedule"  x={24}  y={400} w={190} h={48} label="Scheduled triggers" sub="unattended runs" kind="dev" onClick={onNodeClick} />
+      <Node id="models"    x={254} y={400} w={250} h={48} label="Model store" sub="one artefact per level" kind="data" onClick={onNodeClick} />
+
+      <path className="svg-arr" d="M214 324 L248 324" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M504 324 L538 324" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M734 324 L768 324" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M964 324 L998 324" markerEnd="url(#a2)" />
+
+      {/* models <-> pipeline, both directions */}
+      <path className="svg-arr" d="M350 400 L350 366" markerEnd="url(#a2)" />
+      <path className="svg-arr" d="M410 366 L410 394" markerEnd="url(#a2)" />
+      <text className="svg-edge-label" x="342" y="386" textAnchor="end">reads</text>
+      <text className="svg-edge-label" x="418" y="386">overwrites</text>
+
+      {/* schedule -> pipeline */}
+      <path className="svg-arr" d="M214 424 L232 424 L232 340 L248 340" markerEnd="url(#a2)" />
+
+      {/* validation markers */}
+      <rect x="24" y="486" width="480" height="26" rx="4" fill="rgba(43,163,156,0.1)" stroke="#1E6F6F" />
+      <text className="svg-tag" x="264" y="502" fill="#6BC7C0" textAnchor="middle">INPUT CHECKS — ON THE SOURCE EXTRACTS, BEFORE ANY COMPUTE</text>
+      <rect x="544" y="486" width="190" height="26" rx="4" fill="rgba(43,163,156,0.1)" stroke="#1E6F6F" />
+      <text className="svg-tag" x="639" y="502" fill="#6BC7C0" textAnchor="middle">OUTPUT CHECKS</text>
+      <path className="svg-arr" d="M639 486 L639 352" markerEnd="url(#a2)" strokeDasharray="3 3" />
+    </svg>
+  );
+}
+
+/* =====================================================================
+   DATA
+   ===================================================================== */
+const INHERITED = [
+  {
+    t: "A pipeline that worked, and nobody could operate",
+    d: "The forecasting logic was sound and the models were credible. What did not exist was everything around them: no runbook, no validation, no recovery procedure, no statement of which inputs the run depended on. Operating it meant asking the person who had built it."
+  },
+  {
+    t: "Success meant 'the process exited zero'",
+    d: "Nothing in the system distinguished a completed run from a correct one. A short input file, a stale model or a formula error all produced the same outcome — a green run and a published forecast — and the first real control was a human reading the numbers weeks later."
+  },
+  {
+    t: "Release by console, under outage conditions",
+    d: "The delivery workflows had been blocked by a network policy for weeks, so production runs were being launched by hand through the cloud console with parameters typed per run. It worked, and it left no audit trail and no protection against a mistyped flag."
+  },
+  {
+    t: "Two major framework versions behind",
+    d: "The orchestration framework was two generations old with no supported direct upgrade. Not urgent, frequently raised as though it were, and competing for the same capacity as the operability work that would actually reduce risk."
+  }
+];
+
+const WORKSTREAMS = [
+  {
+    tech: "Workstream 01",
+    title: "Make the run repeatable by someone else",
+    desc: "Runbooks for the monthly cycle and for each environment, written to be followed by a person who has not seen the system before — including the console-based fallback for when the delivery workflows are unavailable, which is the exact moment nobody has time to work it out.",
+    note: "The test applied throughout: could a competent engineer who has never seen this pipeline run it correctly on their first attempt, at month end, without asking anyone? Where the answer was no, that was the next piece of documentation."
+  },
+  {
+    tech: "Workstream 02",
+    title: "Specify what correct looks like before building anything",
+    desc: "A validation framework covering the whole lifecycle — pre-flight business rules through input, model, output and operational checks — written as a specification with each item given an owner, a tier and a status, rather than as a backlog of scripts.",
+    note: "Writing the specification first is what surfaced the defects. Stating what a correct run asserts forces you to read the code that is supposed to guarantee it, and that reading is where the findings came from."
+  },
+  {
+    tech: "Workstream 03",
+    title: "Automate the checks that earn their place",
+    desc: "Fourteen checks implemented as pure functions with every threshold in configuration, placed where the risk is: input checks inside a configuration pass that already ran, output checks on the published artefact. Each ships at warning severity and is promoted to blocking only after a full cycle proves it.",
+    note: "A validation layer that blocks a run on day one, on a threshold nobody agreed, gets switched off within a week — and then the whole layer is gone, including the checks that were right. Trust was treated as the scarce resource, not coverage."
+  },
+  {
+    tech: "Workstream 04",
+    title: "Separate building from deploying",
+    desc: "Two workflows with one job each: build produces images and ships nothing; promote registers a revision against a chosen image for one environment behind a required reviewer. A pull-request build can be proven in a real environment before merge rather than after.",
+    note: "This is what makes 'test in development first' structurally possible. Without a per-branch artefact, proving a change means merging it, and a failure then has to be reverted out of the line that releases are built from."
+  },
+  {
+    tech: "Workstream 05",
+    title: "Name the risks the system was carrying silently",
+    desc: "Model staleness and the absence of any recovery path; a retrain flag whose unattended value nobody could read; reporting columns declared but never written; declared types that did not match the live tables; accuracy history collected for months and read by no one.",
+    note: "Several of these are permission requests or one-line questions rather than engineering work. The value was in writing them down with their consequence attached, so they could be prioritised against features instead of discovered during an incident."
+  }
+];
+
+const FINDINGS = [
+  {
+    sev: "Wrong output",
+    t: "A share calculation using a superseded denominator",
+    d: "Market size is recomputed partway through a post-processing function; the competitor branch kept dividing by the pre-adjustment value. Every competitor share was overstated — by an identical factor across brands within any given month, which is the signature that identified the cause.",
+    f: "Found by writing a consistency check between share and unit columns, not by anyone reporting a wrong number."
+  },
+  {
+    sev: "Dormant safeguard",
+    t: "A reconciliation hook that had never once executed",
+    d: "The hook keeping the reporting tables in step with their declared schema was complete, unit-tested, and unregistered — the two lines registering it were commented out. A production failure on a missing column had been attributed to a stale schema file for weeks.",
+    f: "A written, tested, unregistered safeguard is worse than none: it reads as coverage that is not there."
+  },
+  {
+    sev: "Unreachable check",
+    t: "A guard placed after the step that made its condition impossible",
+    d: "Three inputs are summed, so a month present in some and not others yields a single null. A guard for exactly that ran after the step that extends every file to a common horizon, by which point all of them ended on the same date by construction.",
+    f: "Reading it also exposed an undocumented business assumption applied silently on every run that nobody on the team knew existed."
+  },
+  {
+    sev: "Permanent data gap",
+    t: "Declared columns the pipeline never writes",
+    d: "The accuracy table declares one set of column names while the pipeline emits another. The table was created with the written names and the declared block appended beside it, empty on every row since. It will recur identically in any new environment built from the same declaration.",
+    f: "A name-only schema reconciliation cannot detect this, because nothing is missing — the columns exist and are simply never populated."
+  },
+  {
+    sev: "No recovery path",
+    t: "An irreplaceable artefact with overwrite semantics",
+    d: "Models are written over rather than versioned beside, so a retrain on bad input destroys the artefact needed to recover from it. Object versioning is enabled, but the production role cannot read prior versions — the previous model exists and is unreachable with the access in place.",
+    f: "The highest-value item found, and it is a permissions request rather than engineering work."
+  },
+  {
+    sev: "Unread signal",
+    t: "Accuracy history collected for months, read by nobody",
+    d: "The pipeline scores its own prior forecasts against actuals and writes the result every run. A drifting model shows up as that figure climbing month over month. Nothing reports it, nothing alerts on it, and it appears in no specification.",
+    f: "The answer to 'how would we know the model had drifted' was already in the database. Nobody had looked."
+  }
+];
+
+const DECISIONS = [
+  {
+    q: "Why not lead with the framework upgrade?",
+    a: "It was the most frequently requested item and the least urgent. Two major versions behind is a real cost, but it is a <em>known</em> cost with a documented two-step path, and it changes nothing about the failure mode that was actually hurting — a run that completes and publishes a wrong number. <strong>Sequencing by risk rather than by technical debt</strong> put validation, runbooks and release discipline ahead of it, and the upgrade is scoped and waiting rather than abandoned."
+  },
+  {
+    q: "Why write the specification before any code?",
+    a: "Because specifying what a correct run asserts forces you to read the code that is supposed to guarantee it, and that reading is where every defect in this case study came from. Had the checks been written first, they would have been written against the system as assumed rather than as built — and three of them would have duplicated safeguards that already existed and did not run."
+  },
+  {
+    q: "Why ship checks as warnings rather than gates?",
+    a: "A gate on an unratified threshold produces a false failure, an urgent exception, and then a switched-off validation layer — losing the checks that were right along with the one that was wrong. Each check runs one full cycle at warning severity so the team sees what it would have blocked, and is promoted only once it has earned it. A single flag per environment promotes warnings to errors, so development stays permissive while production blocks."
+  },
+  {
+    q: "Why fix a defect rather than monitor it?",
+    a: "A check that detects a known formula error every month is a monument to not having fixed it. Where a defect is deterministic and the cause is identified, correcting it is the answer and the check is unnecessary overhead. <strong>Validation is for what cannot be eliminated</strong> — bad inputs, model drift, operator error — not for errors you have already understood."
+  },
+  {
+    q: "Why keep build and deploy separate when one workflow is simpler?",
+    a: "Because combining them makes the merge the only control, and a change can then only be proven after it is in the line that releases are built from. Separating them means a branch artefact exists, can be deployed to a real environment, and can be proven before merge — at the cost of one extra deliberate action that teams reliably forget. That trade is why the forgetting is documented as prominently as the procedure."
+  },
+  {
+    q: "Why document risks that nobody asked about?",
+    a: "An unwritten risk cannot be prioritised; it can only be discovered. Several of the findings here are a permissions request or a single question to another team, and they sat open not because anyone decided to accept them but because nobody had stated them with their consequence attached. <strong>Writing them down converts latent risk into backlog</strong>, which is the only form a business can make a decision about."
+  }
+];
+
+const OPEN = [
+  { t: "No recovery path in production", d: "Prior model versions are retained but unreadable by the production role. A permissions request, outstanding." },
+  { t: "Unit suite not in continuous integration", d: "Fifty-seven tests exist; the build workflow has no test step, so nothing executes them automatically." },
+  { t: "Model freshness unchecked", d: "Artefact timestamps are the cheapest staleness signal available and nothing reads them. Specified, not built." },
+  { t: "Accuracy history still unread", d: "Collected every run for months. Needs somebody to look, not somebody to build." },
+  { t: "Framework upgrade outstanding", d: "Two major versions behind, two-step path documented, deliberately sequenced after operability." },
+  { t: "One input convention unconfirmed", d: "A date format assumed from behaviour rather than declared by the supplying team." }
+];
+
+/* =====================================================================
+   MODAL
+   ===================================================================== */
+function ComponentModal({ nodeId, onClose }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    if (nodeId) window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [nodeId, onClose]);
+
+  useEffect(() => {
+    if (nodeId) document.body.style.overflow = 'hidden';
+    else document.body.style.overflow = '';
+    return () => { document.body.style.overflow = ''; };
+  }, [nodeId]);
+
+  const s = nodeId ? COMPONENTS[nodeId] : null;
+  const open = Boolean(s);
+
+  return (
+    <>
+      <div className={`modal-backdrop ${open ? 'open' : ''}`} onClick={onClose} />
+      <aside className={`modal-panel ${open ? 'open' : ''}`} aria-hidden={!open}>
+        {s && (
+          <>
+            <header className="modal-header">
+              <button className="modal-close" onClick={onClose} aria-label="Close">✕</button>
+              <div className={`modal-category ${s.kind === 'core' || s.kind === 'data' ? 'is-new' : ''}`}>{s.category}</div>
+              <h2 className="modal-title">
+                {s.name}
+                {s.altName && <span className="alt">{s.altName}</span>}
+              </h2>
+              <p className="modal-summary">{s.summary}</p>
+            </header>
+            <div className="modal-body">
+              <div className="modal-block">
+                <div className="modal-block-label">Role in this architecture</div>
+                <p>{s.role}</p>
+              </div>
+              <div className="modal-block">
+                <div className="modal-block-label">Engineering talking points</div>
+                <ul>{s.talking.map((t, i) => <li key={i}>{t}</li>)}</ul>
+              </div>
+            </div>
+          </>
+        )}
+      </aside>
+    </>
+  );
+}
+
+/* =====================================================================
+   APP
+   ===================================================================== */
+function App() {
+  const [selected, setSelected] = useState(null);
+  const onNodeClick = useCallback((id) => setSelected(id), []);
+  const onClose = useCallback(() => setSelected(null), []);
+
+  return (
+    <>
+      <header className="site-head">
+        <div className="wrap site-head-row">
+          <a href="#" className="brand">
+            John Carlo Cueva<span>AI DEMAND FORECASTING PLATFORM</span>
+          </a>
+          <nav className="site-nav">
+            <a href="#inherited">Inherited</a>
+            <a href="#architecture">Architecture</a>
+            <a href="#cycle">Monthly cycle</a>
+            <a href="#work">The work</a>
+            <a href="#findings">Findings</a>
+            <a href="#decisions">Decisions</a>
+          </nav>
+        </div>
+      </header>
+
+      <main>
+        <section className="hero">
+          <div className="wrap">
+            <div className="kicker"><span className="dot"></span>Pharmaceutical · AWS · Demand Forecasting Platform</div>
+            <h1>Turning a forecasting model <span className="serif">into a production system.</span></h1>
+            <p className="hero-lede">
+              A monthly commercial demand forecast for an aesthetics brand portfolio, built as a data science deliverable and handed over as working code. The models were sound. What did not exist was everything that makes a system operable — no runbook, no validation, no recovery path, no release discipline, and no way for the pipeline to distinguish a completed run from a correct one. This is the engagement that closed that gap: specifying what correct looks like, automating the checks worth automating, separating building from deploying, and naming the risks the platform had been carrying silently. Writing the specification is what surfaced six latent defects, including a safeguard that had been written, unit-tested, and never once executed.
+            </p>
+            <div className="byline">
+              <strong>John Carlo Cueva</strong>
+              <span className="sep">·</span>
+              <span>AWS Architect / Sr. Manager, Generative AI</span>
+              <span className="sep">·</span>
+              <span className="mono">PHARMACEUTICAL · 2026</span>
+              <span className="tag">Production</span>
+            </div>
+
+            <div className="stat-band">
+              <div className="stat"><div className="stat-number">49</div><div className="stat-label">Month forecast horizon</div></div>
+              <div className="stat"><div className="stat-number">118</div><div className="stat-label">Catalogued datasets</div></div>
+              <div className="stat"><div className="stat-number">3</div><div className="stat-label">Environments, two accounts</div></div>
+              <div className="stat"><div className="stat-number">14</div><div className="stat-label">Automated checks added</div></div>
+              <div className="stat"><div className="stat-number">6</div><div className="stat-label">Latent defects surfaced</div></div>
+            </div>
+          </div>
+        </section>
+
+        <section id="inherited">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">01</span>
+              <h2 className="section-title">What was inherited</h2>
+              <span className="section-sub">working code, no operating model</span>
+            </div>
+
+            <p className="section-intro">
+              This is not a rescue story. The pipeline produced defensible forecasts and the modelling was competent. The gap was between a data science deliverable and a production system — and that gap is almost entirely invisible while nothing goes wrong.
+            </p>
+
+            <div className="decisions-grid">
+              {INHERITED.map((x, i) => (
+                <div key={i} className="decision-card">
+                  <div className="decision-q">{x.t}</div>
+                  <div className="decision-a">{x.d}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="callout warn">
+              <strong>The failure mode that defined the engagement.</strong> A run that crashes is noticed within minutes by whoever launched it. A run that completes and publishes a wrong number is noticed weeks later by someone downstream, after the number has been used for planning. One of those is an incident; the other is a decision already taken. Every priority below follows from treating the second as the thing worth engineering against.
+            </div>
+          </div>
+        </section>
+
+        <section id="architecture">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">02</span>
+              <h2 className="section-title">The platform</h2>
+              <span className="section-sub">click any component</span>
+            </div>
+
+            <p className="section-intro">
+              Two lanes. Delivery produces and places artefacts and never acts on its own; runtime is a single container per execution with no persistent infrastructure between runs. The separation is deliberate — it is what allows a change to be proven in a real environment before it is merged.
+            </p>
+
+            <div className="hint">
+              <strong>Interactive</strong>
+              <span>Click any component for its role, the reasoning behind it, and the trade-offs it carries.</span>
+            </div>
+
+            <div className="legend">
+              <span className="lg mod">Delivery and orchestration</span>
+              <span className="lg new">Pipeline runtime</span>
+              <span className="lg unc">Data and consumption</span>
+            </div>
+
+            <div className="diagram-frame">
+              <div className="diagram-label">
+                <span>PLATFORM ARCHITECTURE</span>
+                <span className="label-title">Delivery lane, runtime lane, and where validation sits in each</span>
+              </div>
+              <div className="svg-wrap">
+                <ArchitectureDiagram onNodeClick={onNodeClick} />
+              </div>
+            </div>
+
+            <div className="callout">
+              <strong>One image serves every environment.</strong> Environments differ by input, not by artefact — no environment-specific build, no console-configured behaviour. The practical consequence is that "what did the production run actually execute" has an answer shaped like a commit, which is the precondition for every assurance claim made about the forecast.
+            </div>
+          </div>
+        </section>
+
+        <section id="cycle">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">03</span>
+              <h2 className="section-title">The monthly cycle</h2>
+              <span className="section-sub">and where each control sits</span>
+            </div>
+
+            <p className="section-intro">
+              One cycle per month, end to end. Reading it in order shows the two properties that matter most: the cheapest checks happen before any meaningful compute is spent, and the last line of defence sits on the artefact the business actually consumes.
+            </p>
+
+            <div className="pipeline">
+              <div className="pipeline-step">
+                <div className="pipeline-num">01</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Upstream · several owners</div>
+                  <div className="pipeline-title">Source extracts land</div>
+                  <div className="pipeline-desc">Units, share, a category market model, three promotional spend files and a transactional extract arrive from different upstream teams, on different conventions, with no shared contract.</div>
+                  <div className="pipeline-note">This is where forecast quality is determined and where it was least examined. No declared end date, no row-count expectation, differing date conventions between files.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step is-new">
+                <div className="pipeline-num">02</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Configuration pass · seconds</div>
+                  <div className="pipeline-title">Input checks, before compute</div>
+                  <div className="pipeline-desc">Shape, date continuity, partial final months, ragged series, nulls, bounds, scale, window ordering, unresolved flags, model prerequisites and configuration consistency — eleven checks against a pass that already ran before every execution.</div>
+                  <div className="pipeline-note">Catching a short input costs seconds. Catching the same input an hour later costs a full run and a day of investigation. That asymmetry is the entire economic case for the layer.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step">
+                <div className="pipeline-num">03</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Run start · lifecycle hook</div>
+                  <div className="pipeline-title">Reporting schema reconciled</div>
+                  <div className="pipeline-desc">The declared table shape is compared against the live database and any missing column is added before the write that would otherwise fail. Additive and name-only by design, which is what made it safe to enable.</div>
+                  <div className="pipeline-note">This step existed, was tested, and had never executed. Enabling it is one of the six findings below.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step">
+                <div className="pipeline-num">04</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Execution · serverless container</div>
+                  <div className="pipeline-title">Extract, assemble, model, forecast</div>
+                  <div className="pipeline-desc">The node graph runs: sources are extracted and aligned, the feature matrix is assembled, and the run either trains new models or loads persisted ones depending on a single runtime flag, then forecasts across the horizon.</div>
+                  <div className="pipeline-note">The retrain-or-rescore flag is the most consequential input the run takes. It decides whether the model store is read or overwritten.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step is-new">
+                <div className="pipeline-num">05</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Output written · last node</div>
+                  <div className="pipeline-title">Output checks on the published artefact</div>
+                  <div className="pipeline-desc">Rows were actually written · every month of the horizon present with no nulls · <strong>each brand's forecast level in a defensible relationship to that brand's own recent actuals.</strong></div>
+                  <div className="pipeline-note">Per brand, necessarily. The pipeline constrains brands to sum to a category total, so one brand far too low is cancelled by others too high and the aggregate is the one view guaranteed to look healthy.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step">
+                <div className="pipeline-num">06</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Publication · downstream</div>
+                  <div className="pipeline-title">Reporting tables and dashboards</div>
+                  <div className="pipeline-desc">The forecast, its feature matrix, model metadata and accuracy scoring are written to the reporting database and consumed by the business intelligence layer for commercial planning.</div>
+                  <div className="pipeline-note">Past this point nothing can tell a correct forecast from a plausible wrong one. Any assurance claim has to be made before it, not at it.</div>
+                </div>
+              </div>
+
+              <div className="pipeline-step">
+                <div className="pipeline-num">07</div>
+                <div className="pipeline-body">
+                  <div className="pipeline-tech">Verification · every environment</div>
+                  <div className="pipeline-title">Independent confirmation and sign-off</div>
+                  <div className="pipeline-desc">A standalone check runs against the published file and prints a result for the verification record — deliberately executable from a laptop with read-only access, so production assurance never requires elevated rights.</div>
+                  <div className="pipeline-note">Two mechanisms asserting the same property, one inside the run and one outside it, is the difference between a system that reports on itself and a system that can be audited.</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="work">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">04</span>
+              <h2 className="section-title">The work</h2>
+              <span className="section-sub">five workstreams, sequenced by risk</span>
+            </div>
+
+            <div className="pipeline">
+              {WORKSTREAMS.map((w, i) => (
+                <div key={i} className={`pipeline-step ${i === 2 ? 'is-new' : ''}`}>
+                  <div className="pipeline-num">{String(i + 1).padStart(2, '0')}</div>
+                  <div className="pipeline-body">
+                    <div className="pipeline-tech">{w.tech}</div>
+                    <div className="pipeline-title">{w.title}</div>
+                    <div className="pipeline-desc" dangerouslySetInnerHTML={{ __html: w.desc }} />
+                    <div className="pipeline-note" dangerouslySetInnerHTML={{ __html: w.note }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="findings">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">05</span>
+              <h2 className="section-title">Six latent defects</h2>
+              <span className="section-sub">none were the task</span>
+            </div>
+
+            <p className="section-intro">
+              Every one of these surfaced while specifying what a correct run asserts, and then reading the code that was supposed to guarantee it. None was reported by a user, and none would have been found by testing the system against its own assumptions — which is the argument for writing validation against a system everyone believes is working.
+            </p>
+
+            <div className="checks-grid">
+              {FINDINGS.map((f, i) => (
+                <div key={i} className="check-card out" style={{ flexDirection: 'column', gap: '0.5rem' }}>
+                  <div className="ck-spec" style={{ marginTop: 0 }}><b>{f.sev}</b></div>
+                  <div className="ck-title">{f.t}</div>
+                  <div className="ck-desc">{f.d}</div>
+                  <div className="ck-desc" style={{ color: 'var(--ink-faded)', borderTop: '1px solid var(--rule)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>{f.f}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="decisions">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">06</span>
+              <h2 className="section-title">Decisions and trade-offs</h2>
+              <span className="section-sub">why it was sequenced this way</span>
+            </div>
+
+            <div className="decisions-grid">
+              {DECISIONS.map((d, i) => (
+                <div key={i} className="decision-card">
+                  <div className="decision-q">{d.q}</div>
+                  <div className="decision-a" dangerouslySetInnerHTML={{ __html: d.a }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section id="open">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">07</span>
+              <h2 className="section-title">What is still open</h2>
+              <span className="section-sub">stated, not hidden</span>
+            </div>
+
+            <p className="section-intro">
+              A case study that ends with everything closed is a case study that has stopped being useful. These are carried deliberately, with their consequence written down, so they can be prioritised against new work rather than found during an incident.
+            </p>
+
+            <div className="tbl-scroll">
+              <table className="stack-table">
+                <tbody>
+                  {OPEN.map((o, i) => (
+                    <tr key={i}><td>{o.t}</td><td>{o.d}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="callout">
+              <strong>The part worth generalising</strong> is not the checks or the workflows. It is that a pipeline reporting success is making a far weaker claim than most organisations hear. "The run completed" and "the answer is right" are different assertions, and in most data platforms only the first one is tested — which is why the business ends up as the final control, weeks downstream, on a number already used.
+            </div>
+          </div>
+        </section>
+
+        <section id="stack">
+          <div className="wrap">
+            <div className="section-label">
+              <span className="section-num">08</span>
+              <h2 className="section-title">Stack</h2>
+            </div>
+            <div className="tbl-scroll">
+              <table className="stack-table">
+                <tbody>
+                  <tr><td>Orchestration</td><td><strong>Kedro</strong> — declarative node graph, data catalog over 118 datasets, environment-scoped configuration, lifecycle hooks, custom hierarchical config loader</td></tr>
+                  <tr><td>Compute</td><td><strong>AWS Fargate</strong> on <strong>Amazon ECS</strong> — one container task per run, no persistent infrastructure; configuration pass and full run share a single image</td></tr>
+                  <tr><td>Modelling</td><td>Bayesian multivariate time series with a compiled statistical toolchain baked into the base image; one persisted artefact per forecast level</td></tr>
+                  <tr><td>Storage</td><td><strong>Amazon S3</strong> — layered data directories from raw through to reporting, plus the model store; object versioning enabled</td></tr>
+                  <tr><td>Artefacts &amp; deploy</td><td><strong>Amazon ECR</strong> with separate immutable release and mutable branch repositories · task-definition revisions as the deployment unit · cross-account copy into production</td></tr>
+                  <tr><td>CI / CD</td><td><strong>GitHub Actions</strong> on self-hosted runners — build and promote as separate workflows, each environment gated by required reviewers; chained role assumption for cross-account deployment</td></tr>
+                  <tr><td>Scheduling</td><td><strong>Amazon EventBridge</strong> — unattended monthly execution targeting the task-definition family</td></tr>
+                  <tr><td>Reporting</td><td>In-memory analytics database, four reporting tables, schema declared in the repository and reconciled at run start · business intelligence dashboards downstream</td></tr>
+                  <tr><td>Validation</td><td>Pure-function checks with <code>pytest</code> · every threshold in configuration · severity and a strict flag resolved from runtime parameters</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <footer>
+        <div className="wrap foot-grid">
+          <div>
+            <div className="foot-brand">John Carlo Cueva</div>
+            <p>AWS Architect / Sr. Manager, Generative AI</p>
+          </div>
+          <p className="mono">AI DEMAND FORECASTING PLATFORM · 2026 · CLIENT DETAIL AND INFRASTRUCTURE IDENTIFIERS OMITTED</p>
+        </div>
+      </footer>
+
+      <ComponentModal nodeId={selected} onClose={onClose} />
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
