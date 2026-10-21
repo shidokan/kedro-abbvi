@@ -779,81 +779,6 @@ const WORKSTREAMS = [
   }
 ];
 
-const FINDINGS = [
-  {
-    sev: "Wrong output",
-    t: "A share calculation using a superseded denominator",
-    d: "Market size is recomputed partway through a post-processing function; the competitor branch kept dividing by the pre-adjustment value. Every competitor share was overstated — by an identical factor across brands within any given month, which is the signature that identified the cause.",
-    f: "Found by writing a consistency check between share and unit columns, not by anyone reporting a wrong number."
-  },
-  {
-    sev: "Dormant safeguard",
-    t: "A reconciliation hook that had never once executed",
-    d: "The hook keeping the reporting tables in step with their declared schema was complete, unit-tested, and unregistered — the two lines registering it were commented out. A production failure on a missing column had been attributed to a stale schema file for weeks.",
-    f: "A written, tested, unregistered safeguard is worse than none: it reads as coverage that is not there."
-  },
-  {
-    sev: "Unreachable check",
-    t: "A guard placed after the step that made its condition impossible",
-    d: "Three inputs are summed, so a month present in some and not others yields a single null. A guard for exactly that ran after the step that extends every file to a common horizon, by which point all of them ended on the same date by construction.",
-    f: "Reading it also exposed an undocumented business assumption applied silently on every run that nobody on the team knew existed."
-  },
-  {
-    sev: "Permanent data gap",
-    t: "Declared columns the pipeline never writes",
-    d: "The accuracy table declares one set of column names while the pipeline emits another. The table was created with the written names and the declared block appended beside it, empty on every row since. It will recur identically in any new environment built from the same declaration.",
-    f: "A name-only schema reconciliation cannot detect this, because nothing is missing — the columns exist and are simply never populated."
-  },
-  {
-    sev: "No recovery path",
-    t: "An irreplaceable artefact with overwrite semantics",
-    d: "Models are written over rather than versioned beside, so a retrain on bad input destroys the artefact needed to recover from it. Object versioning is enabled, but the production role cannot read prior versions — the previous model exists and is unreachable with the access in place.",
-    f: "The highest-value item found, and it is a permissions request rather than engineering work."
-  },
-  {
-    sev: "Unread signal",
-    t: "Accuracy history collected for months, read by nobody",
-    d: "The pipeline scores its own prior forecasts against actuals and writes the result every run. A drifting model shows up as that figure climbing month over month. Nothing reports it, nothing alerts on it, and it appears in no specification.",
-    f: "The answer to 'how would we know the model had drifted' was already in the database. Nobody had looked."
-  }
-];
-
-const DECISIONS = [
-  {
-    q: "Why not lead with the framework upgrade?",
-    a: "It was the most frequently requested item and the least urgent. Two major versions behind is a real cost, but it is a <em>known</em> cost with a documented two-step path, and it changes nothing about the failure mode that was actually hurting — a run that completes and publishes a wrong number. <strong>Sequencing by risk rather than by technical debt</strong> put validation, runbooks and release discipline ahead of it, and the upgrade is scoped and waiting rather than abandoned."
-  },
-  {
-    q: "Why write the specification before any code?",
-    a: "Because specifying what a correct run asserts forces you to read the code that is supposed to guarantee it, and that reading is where every defect in this case study came from. Had the checks been written first, they would have been written against the system as assumed rather than as built — and three of them would have duplicated safeguards that already existed and did not run."
-  },
-  {
-    q: "Why ship checks as warnings rather than gates?",
-    a: "A gate on an unratified threshold produces a false failure, an urgent exception, and then a switched-off validation layer — losing the checks that were right along with the one that was wrong. Each check runs one full cycle at warning severity so the team sees what it would have blocked, and is promoted only once it has earned it. A single flag per environment promotes warnings to errors, so development stays permissive while production blocks."
-  },
-  {
-    q: "Why fix a defect rather than monitor it?",
-    a: "A check that detects a known formula error every month is a monument to not having fixed it. Where a defect is deterministic and the cause is identified, correcting it is the answer and the check is unnecessary overhead. <strong>Validation is for what cannot be eliminated</strong> — bad inputs, model drift, operator error — not for errors you have already understood."
-  },
-  {
-    q: "Why keep build and deploy separate when one workflow is simpler?",
-    a: "Because combining them makes the merge the only control, and a change can then only be proven after it is in the line that releases are built from. Separating them means a branch artefact exists, can be deployed to a real environment, and can be proven before merge — at the cost of one extra deliberate action that teams reliably forget. That trade is why the forgetting is documented as prominently as the procedure."
-  },
-  {
-    q: "Why document risks that nobody asked about?",
-    a: "An unwritten risk cannot be prioritised; it can only be discovered. Several of the findings here are a permissions request or a single question to another team, and they sat open not because anyone decided to accept them but because nobody had stated them with their consequence attached. <strong>Writing them down converts latent risk into backlog</strong>, which is the only form a business can make a decision about."
-  }
-];
-
-const OPEN = [
-  { t: "No recovery path in production", d: "Prior model versions are retained but unreadable by the production role. A permissions request, outstanding." },
-  { t: "Unit suite not in continuous integration", d: "Fifty-seven tests exist; the build workflow has no test step, so nothing executes them automatically." },
-  { t: "Model freshness unchecked", d: "Artefact timestamps are the cheapest staleness signal available and nothing reads them. Specified, not built." },
-  { t: "Accuracy history still unread", d: "Collected every run for months. Needs somebody to look, not somebody to build." },
-  { t: "Framework upgrade outstanding", d: "Two major versions behind, two-step path documented, deliberately sequenced after operability." },
-  { t: "One input convention unconfirmed", d: "A date format assumed from behaviour rather than declared by the supplying team." }
-];
-
 /* =====================================================================
    MODAL
    ===================================================================== */
@@ -925,8 +850,6 @@ function App() {
             <a href="#architecture">Architecture</a>
             <a href="#cycle">Monthly cycle</a>
             <a href="#work">The work</a>
-            <a href="#findings">Findings</a>
-            <a href="#decisions">Decisions</a>
           </nav>
         </div>
       </header>
@@ -1134,82 +1057,10 @@ function App() {
           </div>
         </section>
 
-        <section id="findings">
-          <div className="wrap">
-            <div className="section-label">
-              <span className="section-num">05</span>
-              <h2 className="section-title">Six latent defects</h2>
-              <span className="section-sub">none were the task</span>
-            </div>
-
-            <p className="section-intro">
-              Every one of these surfaced while specifying what a correct run asserts, and then reading the code that was supposed to guarantee it. None was reported by a user, and none would have been found by testing the system against its own assumptions — which is the argument for writing validation against a system everyone believes is working.
-            </p>
-
-            <div className="checks-grid">
-              {FINDINGS.map((f, i) => (
-                <div key={i} className="check-card out" style={{ flexDirection: 'column', gap: '0.5rem' }}>
-                  <div className="ck-spec" style={{ marginTop: 0 }}><b>{f.sev}</b></div>
-                  <div className="ck-title">{f.t}</div>
-                  <div className="ck-desc">{f.d}</div>
-                  <div className="ck-desc" style={{ color: 'var(--ink-faded)', borderTop: '1px solid var(--rule)', paddingTop: '0.5rem', marginTop: '0.25rem' }}>{f.f}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="decisions">
-          <div className="wrap">
-            <div className="section-label">
-              <span className="section-num">06</span>
-              <h2 className="section-title">Decisions and trade-offs</h2>
-              <span className="section-sub">why it was sequenced this way</span>
-            </div>
-
-            <div className="decisions-grid">
-              {DECISIONS.map((d, i) => (
-                <div key={i} className="decision-card">
-                  <div className="decision-q">{d.q}</div>
-                  <div className="decision-a" dangerouslySetInnerHTML={{ __html: d.a }} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        <section id="open">
-          <div className="wrap">
-            <div className="section-label">
-              <span className="section-num">07</span>
-              <h2 className="section-title">What is still open</h2>
-              <span className="section-sub">stated, not hidden</span>
-            </div>
-
-            <p className="section-intro">
-              A case study that ends with everything closed is a case study that has stopped being useful. These are carried deliberately, with their consequence written down, so they can be prioritised against new work rather than found during an incident.
-            </p>
-
-            <div className="tbl-scroll">
-              <table className="stack-table">
-                <tbody>
-                  {OPEN.map((o, i) => (
-                    <tr key={i}><td>{o.t}</td><td>{o.d}</td></tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="callout">
-              <strong>The part worth generalising</strong> is not the checks or the workflows. It is that a pipeline reporting success is making a far weaker claim than most organisations hear. "The run completed" and "the answer is right" are different assertions, and in most data platforms only the first one is tested — which is why the business ends up as the final control, weeks downstream, on a number already used.
-            </div>
-          </div>
-        </section>
-
         <section id="stack">
           <div className="wrap">
             <div className="section-label">
-              <span className="section-num">08</span>
+              <span className="section-num">05</span>
               <h2 className="section-title">Stack</h2>
             </div>
             <div className="tbl-scroll">
